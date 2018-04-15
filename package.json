@@ -1,0 +1,20 @@
+{
+  "name": "node-message-redis",
+  "version": "1.0.0",
+  "description": "Node-Redis обработка сообщений",
+  "main": "index.js",
+  "scripts": {
+    "test": "node node_modules/mocha/bin/mocha"
+  },
+  "author": {
+    "name": "Evgeni Zharkov",
+    "email": "zharkov.ev.u@yandex.ru"
+  },
+  "license": "ISC",
+  "devDependencies": {
+    "mocha": "^5.1.0"
+  },
+  "dependencies": {
+    "redis": "^2.8.0"
+  }
+}

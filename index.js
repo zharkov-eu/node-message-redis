@@ -38,3 +38,5 @@ function getErrors() {
     }
   });
 }
+
+start();

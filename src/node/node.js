@@ -24,24 +24,24 @@ class Node {
     this.message = new MessageRepository(client);
 
     this.activateUpdateNodeAliveInt = () => {
-      this.updateNodeAliveInt = setInterval(this.registry.setAlive(this), 500);
+      this.updateNodeAliveInt = setInterval(() => this.registry.setAlive(this), 500);
     };
     this.activateUpdateGeneratorAliveInt = () => {
-      this.updateGeneratorAliveInt = setInterval(this.registry.setGeneratorAlive(this), 500);
+      this.updateGeneratorAliveInt = setInterval(() => this.registry.setGeneratorAlive(this), 500);
     };
     this.activateCheckGeneratorInt = () => {
-      this.checkGeneratorInt = setInterval(this.checkGenerator, 500);
+      this.checkGeneratorInt = setInterval(this.checkGenerator.bind(this), 500);
     };
     this.activateCheckNodesInt = () => {
-      this.checkNodesInt = setInterval(this.checkNodes, 500);
+      this.checkNodesInt = setInterval(this.checkNodes.bind(this), 500);
     };
     this.activateGenerateMessageInt = () => {
-      this.generateMessageInt = setInterval(this.message.enqueueMessage(stringGeneratorLetter(30)), 500);
+      this.generateMessageInt = setInterval(() => this.message.enqueueMessage(stringGeneratorLetter(30)), 500);
     };
     this.activateHandleMessageInt = () => {
-      this.handleMessageInt = setInterval(this.handleMessage(), 100);
+      this.handleMessageInt = setInterval(this.handleMessage.bind(this), 100);
     };
-  }
+  };
 
   /**
    * Регистрация Node
@@ -50,114 +50,124 @@ class Node {
    * В данной реализации Node сначала работает в режиме Handler вне зависимости
    * от существования генератора, что вызывает задержку <500мс перед назначением первого генератора
    */
-  registryNode = () => new Promise((resolve, reject) => {
-    this.registry.registryNodeNumber()
-        .then(number => {
-          this.number = number;
-          this.name = 'node:' + number;
-          this.handleQueue = 'queue:' + number;
-          return this.registry.registryNodeName(this);
-        })
-        .then(() => {
-          this.startRoleBehavior();
-          console.log("Я " + self.name);
-          resolve(self);
-        })
-        .catch(error => reject(error));
-  });
+  registryNode() {
+    return new Promise((resolve, reject) => {
+      this.registry.registryNodeNumber()
+          .then(number => {
+            this.number = number;
+            this.name = 'node:' + number;
+            this.handleQueue = 'queue:' + number;
+            return this.registry.registryNodeName(this);
+          })
+          .then(() => {
+            this.startRoleBehavior();
+            console.log("Я " + this.name);
+            resolve(this);
+          })
+          .catch(error => reject(error));
+    });
+  }
 
   /**
    * Проверка nodeList на предмет выключившихся Node
    * В данной реализации осуществляется генератором с интервалом,
    * указанным в конструкторе Node
    */
-  checkNodes = () => new Promise((resolve, reject) => {
-    this.registry.listNodes()
-        .then(nodes => {
-          const checkAlivePromises = [];
-          nodes.forEach((node) => {
-            checkAlivePromises.push(() => new Promise(resolve => {
-              this.registry.checkAlive(node)
-                  .then(() => resolve({...node, alive: true}))
-                  .catch(() => resolve({...node, alive: false}));
-            }));
-          });
-          return Promise.all(checkAlivePromises);
-        })
-        .then(nodes => {
-          const removeNodePromises = [];
-          nodes.forEach((node) => {
-            if (!node.alive) removeNodePromises.push(this.registry.removeNode(node));
-          });
-          return Promise.all(removeNodePromises);
-        })
-        .then(() => resolve())
-        .catch(error => reject(error));
-  });
+  checkNodes() {
+    return new Promise((resolve, reject) => {
+      this.registry.listNodes()
+          .then(nodeNames => {
+            const checkAlivePromises = [];
+            nodeNames.forEach((nodeName) => {
+              checkAlivePromises.push(new Promise(resolve => {
+                this.registry.checkAlive({name: nodeName})
+                    .then(() => resolve({name: nodeName, alive: true}))
+                    .catch(() => resolve({name: nodeName, alive: false}));
+              }));
+            });
+            return Promise.all(checkAlivePromises);
+          })
+          .then(nodes => {
+            const removeNodePromises = [];
+            nodes.forEach((node) => {
+              if (!node.alive) removeNodePromises.push(this.registry.removeNode(node));
+            });
+            return Promise.all(removeNodePromises);
+          })
+          .then(() => resolve())
+          .catch(error => reject(error));
+    });
+  }
 
   /**
    * Проверка генератора
    * Перед проверкой проверяется NodeList, однако, существует ситуация, когда
    * новый генератор выключится до переназначения, возможно, стоит добавить обработчик
-   * !! В данной спецификации генератором выбирается Node с наименьшим номером
+   * В данной реализации генератором выбирается Node с наименьшим номером
    */
-  checkGenerator = () => new Promise((resolve, reject) => {
-    this.registry.checkGeneratorAlive()
-        .then(alive => Promise.resolve({alive: true}),
-            dead => new Promise(resolve => {
-              this.checkNodes()
-                  .then(() => resolve({alive: false}))
-            })
-        )
-        .then(node => {
-          return node.alive ? Promise.resolve({bypass: true}) : this.registry.electionGenerator();
-        })
-        .then(reply => {
-          if (reply.bypass) return Promise.resolve();
-          else {
-            if (this.name === reply) {
-              this.generator = true;
-              this.startRoleBehavior();
+  checkGenerator() {
+    return new Promise((resolve, reject) => {
+      this.registry.checkGeneratorAlive()
+          .then(alive => Promise.resolve({alive: true}),
+              dead => new Promise(resolve => {
+                this.checkNodes()
+                    .then(() => resolve({alive: false}))
+              })
+          )
+          .then(node => {
+            return node.alive ? Promise.resolve({bypass: true}) : this.registry.electionGenerator();
+          })
+          .then(reply => {
+            if (reply && reply.bypass) return Promise.resolve();
+            else {
+              if (this.name === reply) {
+                this.generator = true;
+                this.startRoleBehavior();
+              }
+              console.log(reply + ' является Generator');
             }
-            console.log(reply + '  является Generator');
-          }
-        })
-        .then(() => resolve())
-        .catch(error => reject(error));
-  });
+          })
+          .then(() => resolve())
+          .catch(error => reject(error));
+    });
+  }
 
   /**
    * Проверка сообщений, заполнение очереди специфичной для Node
    */
-  checkMessage = () => new Promise((resolve, reject) => {
-    this.message.queueHandleSize(this)
-        .then(size => {
-          return size < 10 ? this.message.enqueueHandleMessage(this) : Promise.resolve();
-        })
-        .then(() => resolve())
-        .catch(error => reject(error));
-  });
+  checkMessage() {
+    return new Promise((resolve, reject) => {
+      this.message.messageQueueSize(this)
+          .then(size => {
+            return size > 5 ? this.message.enqueueHandleMessage(this) : Promise.resolve();
+          })
+          .then(() => resolve())
+          .catch(error => reject(error));
+    });
+  }
 
   /**
    * Обработка сообщений, сообщения берутся из очереди, специфичной для Node
    * Предусмотрена 5% вероятность ошибки
    */
-  handleMessage = () => new Promise((resolve, reject) => {
-    this.message.dequeueHandleMessage(this)
-        .then(message => {
-          return (Math.random() < 0.05) ? this.message.enqueueErrorMessage(message) : Promise.resolve();
-        }, () => {
-          return this.checkMessage();
-        })
-        .then(() => resolve())
-        .catch(error => reject(error));
-  });
+  handleMessage() {
+    return new Promise((resolve, reject) => {
+      this.message.dequeueHandleMessage(this)
+          .then(message => {
+            return (Math.random() < 0.05) ? this.message.enqueueErrorMessage(message) : Promise.resolve();
+          }, () => {
+            return this.checkMessage();
+          })
+          .then(() => resolve())
+          .catch(error => reject(error));
+    });
+  }
 
   /**
    * Модель поведения
    * Возможные модели: Generator | Handler
    */
-  startRoleBehavior = () => {
+  startRoleBehavior() {
     this.activateUpdateNodeAliveInt();
     if (this.generator) {
       clearInterval(this.checkGeneratorInt);

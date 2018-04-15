@@ -12,7 +12,7 @@ class MessageRepository {
     this.llenAsync = promisify(this.client.llen).bind(this.client);
   }
 
-  enqueueMessage = (message) => {
+  enqueueMessage(message) {
     return new Promise((resolve, reject) => {
       this.rpushAsync('messageQueue', message).then(reply => {
         if (!reply) reject(new Error('Ошибка при вставке в messageQueue'));
@@ -21,7 +21,7 @@ class MessageRepository {
     });
   };
 
-  enqueueHandleMessage = (node) => {
+  enqueueHandleMessage(node) {
     return new Promise((resolve, reject) => {
       this.rpoplpushAsync('messageQueue', node.handleQueue).then(reply => {
         if (!reply) reject(new Error('Ошибка при перемещении сообщений в локальную очередь ' + node.handleQueue));
@@ -30,15 +30,15 @@ class MessageRepository {
     });
   };
 
-  queueHandleSize = (node) => {
+  messageQueueSize(node) {
     return new Promise((resolve, reject) => {
-      this.llenAsync(node.handleQueue).then(reply => {
+      this.llenAsync('messageQueue').then(reply => {
         return reply ? resolve(reply) : resolve(0);
       }).catch(error => reject(error));
     });
   };
 
-  dequeueHandleMessage = (node) => {
+  dequeueHandleMessage(node) {
     return new Promise((resolve, reject) => {
       this.rpopAsync(node.handleQueue).then(reply => {
         if (!reply) reject(new Error('Ошибка при получении элемента в локальной очереди ' + node.handleQueue));
@@ -47,7 +47,7 @@ class MessageRepository {
     });
   };
 
-  enqueueErrorMessage = (message) => {
+  enqueueErrorMessage(message) {
     return new Promise((resolve, reject) => {
       this.rpushAsync('errorMessages', message).then(reply => {
         if (!reply) reject(new Error('Ошибка при занесении в errorMessages'));
@@ -56,7 +56,7 @@ class MessageRepository {
     });
   };
 
-  errorMessageQueueSize = () => {
+  errorMessageQueueSize() {
     return new Promise((resolve, reject) => {
       this.llenAsync('errorMessages').then(reply => {
         return reply ? resolve(reply) : resolve(0);
@@ -64,7 +64,7 @@ class MessageRepository {
     });
   };
 
-  dequeueErrorMessages = () => {
+  dequeueErrorMessages() {
     return new Promise((resolve, reject) => {
       this.rpopAsync('errorMessages').then(reply => {
         if (!reply) reject(new Error('Ошибка при получении элемента из errorMessages'));
